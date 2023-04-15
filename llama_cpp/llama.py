@@ -17,7 +17,7 @@ class Llama:
         self,
         model_path: str,
         # NOTE: These parameters are likely to change in the future.
-        n_ctx: int = 512,
+        n_ctx: int = 2048,
         n_parts: int = -1,
         seed: int = 1337,
         f16_kv: bool = False,
@@ -74,7 +74,7 @@ class Llama:
         self.tokens_consumed = 0
         self.n_batch = min(n_ctx, n_batch)
 
-        self.n_threads = n_threads or multiprocessing.cpu_count()
+        self.n_threads = n_threads or max(multiprocessing.cpu_count() // 2, 1)
 
         if not os.path.exists(model_path):
             raise ValueError(f"Model path does not exist: {model_path}")
@@ -360,6 +360,16 @@ class Llama:
                             break
                 text = all_text[: len(all_text) - longest]
                 returned_characters += len(text[start:])
+                _text = ''
+                try:
+                    _text = text[start:].decode("utf-8")
+                except UnicodeDecodeError:
+                    for i in range(1,4):
+                        try:
+                            _text = text[start:-i].decode("utf-8")
+                            break
+                        except UnicodeDecodeError:
+                            continue
                 yield {
                     "id": completion_id,
                     "object": "text_completion",
@@ -367,7 +377,7 @@ class Llama:
                     "model": self.model_path,
                     "choices": [
                         {
-                            "text": text[start:].decode("utf-8"),
+                            "text": _text,
                             "index": 0,
                             "logprobs": None,
                             "finish_reason": None,
@@ -686,8 +696,8 @@ class Llama:
             last_n_tokens_size=state["last_n_tokens_size"],
             verbose=state["verbose"],
         )
-        self.last_n_tokens_data=state["last_n_tokens_data"]
-        self.tokens_consumed=state["tokens_consumed"]
+        self.last_n_tokens_data = state["last_n_tokens_data"]
+        self.tokens_consumed = state["tokens_consumed"]
 
 
     @staticmethod
