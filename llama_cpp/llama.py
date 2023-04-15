@@ -23,6 +23,7 @@ class Llama:
         f16_kv: bool = False,
         logits_all: bool = False,
         vocab_only: bool = False,
+        use_mmap: bool = True,
         use_mlock: bool = False,
         embedding: bool = False,
         n_threads: Optional[int] = None,
@@ -40,6 +41,7 @@ class Llama:
             f16_kv: Use half-precision for key/value cache.
             logits_all: Return logits for all tokens, not just the last token.
             vocab_only: Only load the vocabulary no weights.
+            use_mmap: Use mmap if possible.
             use_mlock: Force the system to keep the model in RAM.
             embedding: Embedding mode only.
             n_threads: Number of threads to use. If None, the number of threads is automatically determined.
@@ -63,6 +65,7 @@ class Llama:
         self.params.f16_kv = f16_kv
         self.params.logits_all = logits_all
         self.params.vocab_only = vocab_only
+        self.params.use_mmap = use_mmap
         self.params.use_mlock = use_mlock
         self.params.embedding = embedding
 
@@ -314,7 +317,15 @@ class Llama:
         if self.verbose:
             llama_cpp.llama_reset_timings(self.ctx)
 
-        if len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
+        if max_tokens <= 0:
+            # Unlimited, depending on n_ctx.
+            if len(prompt_tokens) >= int(llama_cpp.llama_n_ctx(self.ctx)):
+                raise ValueError(
+                    f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
+                )
+            else:
+                max_tokens = int(llama_cpp.llama_n_ctx(self.ctx)) - len(prompt_tokens)
+        elif len(prompt_tokens) + max_tokens > int(llama_cpp.llama_n_ctx(self.ctx)):
             raise ValueError(
                 f"Requested tokens exceed context window of {llama_cpp.llama_n_ctx(self.ctx)}"
             )
@@ -462,7 +473,7 @@ class Llama:
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -517,7 +528,7 @@ class Llama:
         Args:
             prompt: The prompt to generate text from.
             suffix: A suffix to append to the generated text. If None, no suffix is appended.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             temperature: The temperature to use for sampling.
             top_p: The top-p value to use for sampling.
             logprobs: The number of logprobs to return. If None, no logprobs are returned.
@@ -626,7 +637,7 @@ class Llama:
             top_k: The top-k value to use for sampling.
             stream: Whether to stream the results.
             stop: A list of strings to stop generation when encountered.
-            max_tokens: The maximum number of tokens to generate.
+            max_tokens: The maximum number of tokens to generate. If max_tokens <= 0, the maximum number of tokens to generate is unlimited and depends on n_ctx.
             repeat_penalty: The penalty to apply to repeated tokens.
 
         Returns:
@@ -671,6 +682,7 @@ class Llama:
             f16_kv=self.params.f16_kv,
             logits_all=self.params.logits_all,
             vocab_only=self.params.vocab_only,
+            use_mmap=self.params.use_mmap,
             use_mlock=self.params.use_mlock,
             embedding=self.params.embedding,
             last_n_tokens_size=self.last_n_tokens_size,
@@ -689,6 +701,7 @@ class Llama:
             f16_kv=state["f16_kv"],
             logits_all=state["logits_all"],
             vocab_only=state["vocab_only"],
+            use_mmap=state["use_mmap"],
             use_mlock=state["use_mlock"],
             embedding=state["embedding"],
             n_threads=state["n_threads"],
