@@ -13,7 +13,7 @@ Then visit http://localhost:8000/docs to see the interactive API docs.
 """
 import os
 import json
-from typing import List, Optional, Literal, Union, Iterator, Dict
+from typing import List, Optional, Literal, Union, Iterator, Dict, Any
 from typing_extensions import TypedDict
 
 import llama_cpp
@@ -25,12 +25,12 @@ from sse_starlette.sse import EventSourceResponse
 
 
 class Settings(BaseSettings):
-    model: str
-    n_ctx: int = 2048
+    model: str = "/Users/evgenyvakhteev/Documents/src/llama.cpp/models/gpt4all-7B/gpt4all-lora-quantized.bin"
+    n_ctx: int = 8048
     n_batch: int = 8
     n_threads: int = ((os.cpu_count() or 2) // 2) or 1
     f16_kv: bool = True
-    use_mlock: bool = False  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
+    use_mlock: bool = True  # This causes a silent failure on platforms that don't support mlock (e.g. Windows) took forever to figure out...
     embedding: bool = True
     last_n_tokens_size: int = 64
 
@@ -62,7 +62,7 @@ llama = llama_cpp.Llama(
 class CreateCompletionRequest(BaseModel):
     prompt: Union[str, List[str]]
     suffix: Optional[str] = Field(None)
-    max_tokens: int = 16
+    max_tokens: Optional[int] = 2000
     temperature: float = 0.8
     top_p: float = 0.95
     echo: bool = False
@@ -103,6 +103,8 @@ def create_completion(request: CreateCompletionRequest):
     if isinstance(request.prompt, list):
         request.prompt = "".join(request.prompt)
 
+    if not request.max_tokens:
+        request.max_tokens = 2000
     completion_or_chunks = llama(
         **request.dict(
             exclude={
@@ -161,7 +163,7 @@ class CreateChatCompletionRequest(BaseModel):
     top_p: float = 0.95
     stream: bool = False
     stop: List[str] = []
-    max_tokens: int = 128
+    max_tokens: Optional[int] = 2000
 
     # ignored or currently unsupported
     model: Optional[str] = Field(None)
@@ -199,6 +201,8 @@ CreateChatCompletionResponse = create_model_from_typeddict(llama_cpp.ChatComplet
 async def create_chat_completion(
     request: CreateChatCompletionRequest,
 ) -> Union[llama_cpp.ChatCompletion, EventSourceResponse]:
+    if not request.max_tokens:
+        request.max_tokens = 2000
     completion_or_chunks = llama.create_chat_completion(
         **request.dict(
             exclude={

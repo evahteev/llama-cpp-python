@@ -645,7 +645,7 @@ class Llama:
         """
         instructions = """Complete the following chat conversation between the user and the assistant. System messages should be strictly followed as additional instructions."""
         chat_history = "\n".join(
-            f'{message["role"]} {message.get("user", "")}: {message["content"]}'
+            f'{message["role"]} {message.get("user") if message.get("user") else ""}: {message["content"]}'
             for message in messages
         )
         PROMPT = f"### Instructions:\n{instructions}\n\n{chat_history}\n\n### Response:\nassistant:"
